@@ -2,12 +2,11 @@
 setlocal
 cd /d "%~dp0"
 
-where python >nul 2>&1
+where pythonw >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Python not found on PATH.
-    pause
-    exit /b 1
+    where python >nul 2>&1
+    if %errorlevel% neq 0 exit /b 1
 )
 
-python "%~dp0desktop_app.py"
-pause
+start "" pythonw "%~dp0desktop_app.py"
+exit
