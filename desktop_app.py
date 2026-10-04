@@ -339,29 +339,42 @@ class GrokDesktopApp(tk.Tk):
 
     def _process_agent_turn(self, specialist_name: str, text: str):
         history = self.histories[specialist_name]
-        # In Chat Friendly mode, prioritize conversational warmth
-        if specialist_name == "Chat Friendly":
-            response = self._friendly_chat(text)
-            actions = []
-        else:
-            res = BE.execute_turn(text, history)
-            response = res["response"]
-            actions = res.get("actions", [])
+        spec_prompt = SPECIALISTS[specialist_name]["prompt"]
+
+        # Run real AI turn with specialist personality
+        res = BE.execute_turn(text, history, custom_system=spec_prompt)
+        response = res["response"]
+        actions = res.get("actions", [])
 
         self.after(0, lambda: self._render_bot_reply(specialist_name, response, actions))
 
     def _friendly_chat(self, text: str) -> str:
-        q = text.lower()
-        if any(w in q for w in ["hi", "hello", "yo", "hey", "sup"]):
-            return "Hey there! Great to chat with you. How's your day going?"
+        q = text.lower().strip()
+        words = set(re.findall(r"\w+", q))
+        greetings = {"hi", "hello", "yo", "hey", "ey", "bro", "sup", "wassup", "hiya"}
+
+        if words & greetings:
+            import random
+            replies = [
+                "Yo! What's good bro? What are we working on or talking about today?",
+                "Ey bro! How's it going? Always ready to chill and chat.",
+                "Hey! What's up? Tell me what's on your mind.",
+                "Yo! Great to hear from you. What's new?",
+            ]
+            return random.choice(replies)
         elif "joke" in q:
             return "Why do programmers prefer dark mode? Because light attracts bugs! 😄"
-        elif "how are you" in q:
-            return "Running smooth and fast! Ready to talk about anything—games, life, coding, or just chilling."
-        elif "who are you" in q:
-            return "I'm Grok in Chat Friendly mode! Your casual companion on your PC. No corporate stiffness here."
+        elif any(w in q for w in ["how are you", "hru", "how r u"]):
+            return "Chilling and running smooth on your PC! How are you doing today?"
+        elif any(w in q for w in ["who are you", "what are you"]):
+            return "I'm Grok in Chat Friendly mode! Your casual companion on your desktop. Ask me anything, rant, or just hang out."
+        elif any(w in q for w in ["bye", "cya", "see ya", "later"]):
+            return "Catch you later bro! Have an awesome day."
+        elif any(w in q for w in ["bored", "boring"]):
+            return "Bored? We can talk about wild tech theories, play trivia, brainstorm game ideas, or I can tell you some weird facts. Pick your poison!"
         else:
-            return f"That's interesting! Tell me more about that. I'm always down to talk."
+            return f"Haha I feel you! What's the plan for today? Any cool projects or just relaxing?"
+
 
     def _render_bot_reply(self, specialist_name: str, response: str, actions: list[dict]):
         self.chat_display.config(state=tk.NORMAL)

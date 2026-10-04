@@ -24,7 +24,39 @@ TOOL: finish("final summary")
 
 
 def call_free_llm(messages: list[dict], api_key: str = "") -> str:
-    # 1. Try local Ollama if running
+    # 1. Local gateway (Port 20128)
+    gateway_key = os.environ.get("HERMES_CUSTOM_LOCALHOST_20128_API_KEY") or os.environ.get("CUSTOM_API_KEY", "")
+    if gateway_key:
+        try:
+            req = urllib.request.Request(
+                "http://localhost:20128/v1/chat/completions",
+                data=json.dumps({
+                    "model": "ag/gemini-3.8-flash-low",
+                    "messages": messages,
+                }).encode(),
+                headers={
+                    "Authorization": f"Bearer {gateway_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            chunks = []
+            with urllib.request.urlopen(req, timeout=10) as r:
+                for line in r:
+                    line = line.decode("utf-8", errors="replace").strip()
+                    if line.startswith("data: ") and line != "data: [DONE]":
+                        try:
+                            chunk = json.loads(line[6:])
+                            delta = chunk["choices"][0]["delta"].get("content", "")
+                            chunks.append(delta)
+                        except Exception:
+                            pass
+            reply = "".join(chunks).strip()
+            if reply:
+                return reply
+        except Exception:
+            pass
+
+    # 2. Try local Ollama if running
     try:
         req = urllib.request.Request(
             "http://localhost:11434/api/chat",
@@ -37,27 +69,6 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> str:
     except Exception:
         pass
 
-    # 2. Try OpenRouter free tier if key provided or env var
-    token = api_key or os.environ.get("OPENROUTER_API_KEY", "")
-    if token:
-        try:
-            req = urllib.request.Request(
-                "https://openrouter.ai/api/v1/chat/completions",
-                data=json.dumps({
-                    "model": "nvidia/nemotron-3.5-lightning:free",
-                    "messages": messages,
-                }).encode(),
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=15) as r:
-                res = json.loads(r.read().decode())
-                return res["choices"][0]["message"]["content"]
-        except Exception:
-            pass
-
     # 3. Built-in Local Autonomous Runner for offline feel
     last_user_msg = ""
     for m in reversed(messages):
@@ -65,7 +76,16 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> str:
             last_user_msg = m["content"]
             break
 
-    query = last_user_msg.lower()
+    query = last_user_msg.lower().strip()
+    words = set(re.findall(r"\w+", query))
+
+    if words & {"hi", "hello", "yo", "hey", "ey", "bro", "sup", "wassup", "hiya"}:
+        import random
+        return random.choice([
+            "Yo bro! What's good? What are we working on or chatting about?",
+            "Ey! How's it going? Always ready for tasks or chilling.",
+            "What's up! Ready to run commands, scout info, or just talk.",
+        ])
 
     if "search" in query or "who" in query or "what is" in query or "latest" in query:
         q = re.sub(r"^(search|look up|find|what is)\s+", "", last_user_msg, flags=re.I)
