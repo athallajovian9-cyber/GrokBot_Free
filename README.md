@@ -1,5 +1,8 @@
 # Grok Bot (Free Local Edition)
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20Vortex%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/QtyBucygQ6)
+[![GitHub release](https://img.shields.io/github/v/release/athallajovian9-cyber/GrokBot_Free?color=10B981)](https://github.com/athallajovian9-cyber/GrokBot_Free/releases)
+
 A free, local replica of Grok Bot from x.ai / grok.com:
 **An AI teammate with its own computer environment**.
 
