@@ -28,7 +28,21 @@ class GrokHandler(SimpleHTTPRequestHandler):
             try:
                 data = json.loads(body)
                 user_msg = data.get("message", "")
-                result = BE.execute_turn(user_msg, SESSION_HISTORY)
+                bot_name = data.get("bot", "Grok Lead")
+
+                if bot_name == "Chat Friendly":
+                    q = user_msg.lower()
+                    if any(w in q for w in ["hi", "hello", "yo", "hey", "sup"]):
+                        resp_text = "Hey there! Great to chat with you. What's on your mind today?"
+                    elif "joke" in q:
+                        resp_text = "Why do programmers prefer dark mode? Because light attracts bugs! 😄"
+                    elif "how are you" in q:
+                        resp_text = "Running great and totally free! Ready to chat about games, movies, tech, or whatever you want."
+                    else:
+                        resp_text = f"That sounds awesome! Tell me more about it. I'm here for fun casual chats whenever you want."
+                    result = {"response": resp_text, "actions": []}
+                else:
+                    result = BE.execute_turn(user_msg, SESSION_HISTORY)
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

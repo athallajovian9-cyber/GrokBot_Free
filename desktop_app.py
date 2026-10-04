@@ -1,0 +1,388 @@
+"""Grok Bot Free - Native Desktop App (Tkinter).
+
+Runs completely on the user's PC with selectable specialists:
+- Grok Lead (General autonomous teammate)
+- Code Specialist (Terminal & Python automation)
+- Web Scout (Live search & web recon)
+- Chat Friendly (Casual conversation, wit, and friendly chats)
+
+Zero external pip dependencies (built-in standard library).
+"""
+from __future__ import annotations
+
+import sys
+import threading
+import tkinter as tk
+from pathlib import Path
+from tkinter import ttk
+
+import agent_tools as T
+import bot_engine as BE
+
+HERE = Path(__file__).resolve().parent
+
+SPECIALISTS = {
+    "Grok Lead": {
+        "icon": "🤖",
+        "role": "Autonomous General",
+        "desc": "Plans tasks, runs computer tools, writes code, and searches web.",
+        "prompt": "You are Grok Lead, an autonomous AI teammate with a computer. You are witty, smart, direct, and execute real tasks.",
+    },
+    "Code Specialist": {
+        "icon": "💻",
+        "role": "Terminal & Python",
+        "desc": "Focused on writing code, debugging, executing scripts in terminal.",
+        "prompt": "You are Code Specialist. You live inside the terminal and write ultra-clean code, inspect errors, and run commands.",
+    },
+    "Web Scout": {
+        "icon": "🔍",
+        "role": "DuckDuckGo & Recon",
+        "desc": "Searches the web, finds up-to-date facts, and summarizes findings.",
+        "prompt": "You are Web Scout. You specialize in web queries, fact-finding, and summarizing real-time web search results.",
+    },
+    "Chat Friendly": {
+        "icon": "💬",
+        "role": "Casual & Fun Friend",
+        "desc": "Friendly conversational mode for just hanging out, joking, and chatting.",
+        "prompt": "You are Grok in Chat Friendly mode! You are warm, fun, witty, super easy to talk to, and great at casual conversation. You don't need to force code or commands unless asked.",
+    },
+}
+
+
+class GrokDesktopApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Grok Bot Free — AI Teammate with a Computer")
+        self.geometry("960x680")
+        self.minsize(800, 550)
+        self.configure(bg="#0B0B0E")
+
+        self.current_specialist = "Grok Lead"
+        self.histories: dict[str, list[dict]] = {k: [] for k in SPECIALISTS}
+
+        self._build_ui()
+        self.switch_specialist("Grok Lead")
+
+    def _build_ui(self):
+        # Left Sidebar (Bot Roster)
+        sidebar = tk.Frame(self, bg="#121216", width=260, padx=14, pady=16)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar.pack_propagate(False)
+
+        brand_lbl = tk.Label(
+            sidebar,
+            text="⚡ GROK BOT",
+            font=("Segoe UI", 14, "bold"),
+            bg="#121216",
+            fg="white",
+        )
+        brand_lbl.pack(anchor="w")
+
+        sub_lbl = tk.Label(
+            sidebar,
+            text="DESKTOP COMPUTER AGENT",
+            font=("Consolas", 8, "bold"),
+            bg="#121216",
+            fg="#10B981",
+        )
+        sub_lbl.pack(anchor="w", pady=(2, 16))
+
+        roster_lbl = tk.Label(
+            sidebar,
+            text="TEAM SPECIALISTS",
+            font=("Segoe UI", 8, "bold"),
+            bg="#121216",
+            fg="#71717A",
+        )
+        roster_lbl.pack(anchor="w", pady=(0, 8))
+
+        # Specialist Buttons Frame
+        self.btn_frames: dict[str, tk.Frame] = {}
+
+        for name, spec in SPECIALISTS.items():
+            card = tk.Frame(
+                sidebar,
+                bg="#1B1C22",
+                padx=10,
+                pady=10,
+                cursor="hand2",
+                highlightthickness=1,
+                highlightbackground="#2A2B33",
+            )
+            card.pack(fill=tk.X, pady=4)
+            card.bind("<Button-1>", lambda e, n=name: self.switch_specialist(n))
+
+            top_row = tk.Frame(card, bg="#1B1C22")
+            top_row.pack(fill=tk.X)
+            top_row.bind("<Button-1>", lambda e, n=name: self.switch_specialist(n))
+
+            icon = tk.Label(
+                top_row,
+                text=spec["icon"],
+                font=("Segoe UI", 12),
+                bg="#1B1C22",
+                fg="white",
+            )
+            icon.pack(side=tk.LEFT, padx=(0, 8))
+            icon.bind("<Button-1>", lambda e, n=name: self.switch_specialist(n))
+
+            title = tk.Label(
+                top_row,
+                text=name,
+                font=("Segoe UI", 10, "bold"),
+                bg="#1B1C22",
+                fg="white",
+            )
+            title.pack(side=tk.LEFT)
+            title.bind("<Button-1>", lambda e, n=name: self.switch_specialist(n))
+
+            role_lbl = tk.Label(
+                card,
+                text=spec["role"],
+                font=("Segoe UI", 8),
+                bg="#1B1C22",
+                fg="#A1A1AA",
+            )
+            role_lbl.pack(anchor="w", pady=(2, 0))
+            role_lbl.bind("<Button-1>", lambda e, n=name: self.switch_specialist(n))
+
+            self.btn_frames[name] = card
+
+        # Computer status box
+        pc_box = tk.LabelFrame(
+            sidebar,
+            text=" 🖥️ Bot Computer ",
+            font=("Segoe UI", 8, "bold"),
+            bg="#0D0E12",
+            fg="#A1A1AA",
+            padx=8,
+            pady=8,
+        )
+        pc_box.pack(side=tk.BOTTOM, fill=tk.X)
+
+        spec_text = "Platform: Windows 11\nWorkspace: ./workspace\nTerminal: Bash / CMD\nCost: $0.00 Free"
+        pc_lbl = tk.Label(
+            pc_box,
+            text=spec_text,
+            font=("Consolas", 8),
+            bg="#0D0E12",
+            fg="#71717A",
+            justify=tk.LEFT,
+        )
+        pc_lbl.pack(anchor="w")
+
+        # Right Main Chat Area
+        main_frame = tk.Frame(self, bg="#0B0B0E")
+        main_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # Header bar
+        header = tk.Frame(main_frame, bg="#121216", height=50, padx=20)
+        header.pack(fill=tk.X, side=tk.TOP)
+        header.pack_propagate(False)
+
+        self.header_title = tk.Label(
+            header,
+            text="Grok Lead",
+            font=("Segoe UI", 11, "bold"),
+            bg="#121216",
+            fg="white",
+        )
+        self.header_title.pack(side=tk.LEFT, pady=14)
+
+        self.header_desc = tk.Label(
+            header,
+            text="· Autonomous General",
+            font=("Segoe UI", 9),
+            bg="#121216",
+            fg="#71717A",
+        )
+        self.header_desc.pack(side=tk.LEFT, padx=6, pady=14)
+
+        status_dot = tk.Label(
+            header,
+            text="● Online",
+            font=("Segoe UI", 9, "bold"),
+            bg="#121216",
+            fg="#10B981",
+        )
+        status_dot.pack(side=tk.RIGHT, pady=14)
+
+        # Chat display area
+        chat_container = tk.Frame(main_frame, bg="#0B0B0E", padx=16, pady=12)
+        chat_container.pack(fill=tk.BOTH, expand=True)
+
+        self.chat_display = tk.Text(
+            chat_container,
+            wrap=tk.WORD,
+            bg="#0F1015",
+            fg="#E4E4E7",
+            font=("Segoe UI", 10),
+            bd=0,
+            padx=14,
+            pady=14,
+            insertbackground="white",
+        )
+        self.chat_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar = tk.Scrollbar(chat_container, command=self.chat_display.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.chat_display.config(yscrollcommand=scrollbar.set)
+        self.chat_display.config(state=tk.DISABLED)
+
+        # Tag styles for messages
+        self.chat_display.tag_config("user_tag", foreground="#60A5FA", font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("bot_tag", foreground="#34D399", font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("tool_tag", foreground="#FBBF24", font=("Consolas", 9))
+        self.chat_display.tag_config("body_tag", foreground="#E4E4E7", font=("Segoe UI", 10))
+
+        # Input Frame
+        input_frame = tk.Frame(main_frame, bg="#121216", padx=16, pady=14)
+        input_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        self.entry = tk.Entry(
+            input_frame,
+            bg="#1B1C22",
+            fg="white",
+            font=("Segoe UI", 11),
+            bd=0,
+            highlightthickness=1,
+            highlightcolor="#3F3F46",
+            insertbackground="white",
+        )
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=6)
+        self.entry.bind("<Return>", lambda e: self.send_message())
+        self.entry.focus_set()
+
+        self.send_btn = tk.Button(
+            input_frame,
+            text="Send / Run",
+            font=("Segoe UI", 9, "bold"),
+            bg="#FFFFFF",
+            fg="#000000",
+            relief=tk.FLAT,
+            padx=16,
+            pady=4,
+            command=self.send_message,
+            cursor="hand2",
+        )
+        self.send_btn.pack(side=tk.RIGHT)
+
+    def switch_specialist(self, name: str):
+        self.current_specialist = name
+        spec = SPECIALISTS[name]
+
+        # Update card highlights
+        for b_name, frame in self.btn_frames.items():
+            if b_name == name:
+                frame.config(bg="#272730", highlightbackground="#52525B")
+                for child in frame.winfo_children():
+                    child.config(bg="#272730")
+                    if isinstance(child, tk.Frame):
+                        for subchild in child.winfo_children():
+                            subchild.config(bg="#272730")
+            else:
+                frame.config(bg="#1B1C22", highlightbackground="#2A2B33")
+                for child in frame.winfo_children():
+                    child.config(bg="#1B1C22")
+                    if isinstance(child, tk.Frame):
+                        for subchild in child.winfo_children():
+                            subchild.config(bg="#1B1C22")
+
+        # Update header
+        self.header_title.config(text=f"{spec['icon']} {name}")
+        self.header_desc.config(text=f"· {spec['role']}")
+
+        # Clear and redraw chat for this specialist
+        self.chat_display.config(state=tk.NORMAL)
+        self.chat_display.delete("1.0", tk.END)
+
+        intro = (
+            f"You switched to {name} ({spec['role']})!\n"
+            f"{spec['desc']}\n"
+            f"{'-' * 60}\n"
+        )
+        self.chat_display.insert(tk.END, intro, "tool_tag")
+
+        # Re-render history if exists
+        history = self.histories[name]
+        for msg in history:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "user":
+                self.chat_display.insert(tk.END, f"\nYou: ", "user_tag")
+                self.chat_display.insert(tk.END, f"{content}\n", "body_tag")
+            elif role == "assistant":
+                self.chat_display.insert(tk.END, f"\n{name}: ", "bot_tag")
+                self.chat_display.insert(tk.END, f"{content}\n", "body_tag")
+
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+
+    def send_message(self):
+        text = self.entry.get().strip()
+        if not text:
+            return
+        self.entry.delete(0, tk.END)
+
+        name = self.current_specialist
+        self.histories[name].append({"role": "user", "content": text})
+
+        self.chat_display.config(state=tk.NORMAL)
+        self.chat_display.insert(tk.END, f"\nYou: ", "user_tag")
+        self.chat_display.insert(tk.END, f"{text}\n", "body_tag")
+        self.chat_display.insert(tk.END, f"[{name} is thinking & acting...]\n", "tool_tag")
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+
+        # Run agent logic in background thread
+        threading.Thread(target=self._process_agent_turn, args=(name, text), daemon=True).start()
+
+    def _process_agent_turn(self, specialist_name: str, text: str):
+        history = self.histories[specialist_name]
+        # In Chat Friendly mode, prioritize conversational warmth
+        if specialist_name == "Chat Friendly":
+            response = self._friendly_chat(text)
+            actions = []
+        else:
+            res = BE.execute_turn(text, history)
+            response = res["response"]
+            actions = res.get("actions", [])
+
+        self.after(0, lambda: self._render_bot_reply(specialist_name, response, actions))
+
+    def _friendly_chat(self, text: str) -> str:
+        q = text.lower()
+        if any(w in q for w in ["hi", "hello", "yo", "hey", "sup"]):
+            return "Hey there! Great to chat with you. How's your day going?"
+        elif "joke" in q:
+            return "Why do programmers prefer dark mode? Because light attracts bugs! 😄"
+        elif "how are you" in q:
+            return "Running smooth and fast! Ready to talk about anything—games, life, coding, or just chilling."
+        elif "who are you" in q:
+            return "I'm Grok in Chat Friendly mode! Your casual companion on your PC. No corporate stiffness here."
+        else:
+            return f"That's interesting! Tell me more about that. I'm always down to talk."
+
+    def _render_bot_reply(self, specialist_name: str, response: str, actions: list[dict]):
+        self.chat_display.config(state=tk.NORMAL)
+
+        # Delete loading line
+        end_idx = self.chat_display.index("end-1c")
+        # Insert actions
+        for act in actions:
+            self.chat_display.insert(tk.END, f"\n⚙️ TOOL ({act['type']}): {act['detail']}\n", "tool_tag")
+            self.chat_display.insert(tk.END, f"{act['output'][:200]}\n", "tool_tag")
+
+        self.chat_display.insert(tk.END, f"\n{specialist_name}: ", "bot_tag")
+        self.chat_display.insert(tk.END, f"{response}\n", "body_tag")
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+
+
+def main():
+    app = GrokDesktopApp()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()

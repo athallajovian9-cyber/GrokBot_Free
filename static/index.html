@@ -240,25 +240,32 @@
     </div>
 
     <div class="bot-roster">
-      <div class="bot-card active">
+      <div class="bot-card active" onclick="switchBot('Grok Lead')">
         <div class="bot-avatar">🤖</div>
         <div class="bot-meta">
           <h4>Grok Lead</h4>
           <p>Autonomous General</p>
         </div>
       </div>
-      <div class="bot-card">
+      <div class="bot-card" onclick="switchBot('Code Specialist')">
         <div class="bot-avatar">💻</div>
         <div class="bot-meta">
           <h4>Code Specialist</h4>
           <p>Terminal & Python</p>
         </div>
       </div>
-      <div class="bot-card">
+      <div class="bot-card" onclick="switchBot('Web Scout')">
         <div class="bot-avatar">🔍</div>
         <div class="bot-meta">
           <h4>Web Scout</h4>
           <p>DuckDuckGo Engine</p>
+        </div>
+      </div>
+      <div class="bot-card" onclick="switchBot('Chat Friendly')">
+        <div class="bot-avatar">💬</div>
+        <div class="bot-meta">
+          <h4>Chat Friendly</h4>
+          <p>Casual & Fun Friend</p>
         </div>
       </div>
     </div>
@@ -296,6 +303,45 @@
   </main>
 
   <script>
+    let currentBot = "Grok Lead";
+    const botData = {
+      "Grok Lead": { role: "Autonomous General", icon: "🤖" },
+      "Code Specialist": { role: "Terminal & Python", icon: "💻" },
+      "Web Scout": { role: "DuckDuckGo Engine", icon: "🔍" },
+      "Chat Friendly": { role: "Casual & Fun Friend", icon: "💬" }
+    };
+    const botHistories = {
+      "Grok Lead": [],
+      "Code Specialist": [],
+      "Web Scout": [],
+      "Chat Friendly": []
+    };
+
+    function switchBot(name) {
+      currentBot = name;
+      document.querySelectorAll(".bot-card").forEach(c => {
+        if (c.innerText.includes(name)) c.classList.add("active");
+        else c.classList.remove("active");
+      });
+      document.querySelector(".topbar div:first-child").innerHTML =
+        `<strong>${botData[name].icon} ${name}</strong> <span style="color:#71717a">· ${botData[name].role}</span>`;
+
+      // Render conversation for this specialist
+      chat.innerHTML = "";
+      const history = botHistories[name];
+      if (history.length === 0) {
+        appendMessage("assistant", `Switched to ${name} (${botData[name].role}). How can I help you?`);
+      } else {
+        history.forEach(m => {
+          if (m.actions) {
+            renderAssistantResponse({ response: m.response, actions: m.actions });
+          } else {
+            appendMessage(m.role, m.content);
+          }
+        });
+      }
+    }
+
     const chat = document.getElementById("chat");
     const input = document.getElementById("userInput");
 
@@ -310,6 +356,7 @@
 
       // Add user message
       appendMessage("user", text);
+      botHistories[currentBot].push({ role: "user", content: text });
 
       // Loading placeholder
       const loadingId = appendMessage("assistant", "Thinking & using computer tools...");
@@ -318,7 +365,7 @@
         const resp = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text })
+          body: JSON.stringify({ message: text, bot: currentBot })
         });
         const data = await resp.json();
 
@@ -326,6 +373,7 @@
         const el = document.getElementById(loadingId);
         if (el) el.remove();
 
+        botHistories[currentBot].push({ role: "assistant", response: data.response, actions: data.actions });
         renderAssistantResponse(data);
       } catch (err) {
         const el = document.getElementById(loadingId);
