@@ -1,0 +1,6 @@
+{
+  "provider_name": "Mistral AI",
+  "api_key": "",
+  "base_url": "https://api.mistral.ai/v1",
+  "model": "mistral-large-latest"
+}
