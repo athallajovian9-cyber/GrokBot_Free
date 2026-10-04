@@ -9,4 +9,5 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-start "" pythonw "%~dp0desktop_app.py"
+python "%~dp0desktop_app.py"
+pause

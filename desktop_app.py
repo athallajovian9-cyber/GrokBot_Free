@@ -232,6 +232,7 @@ class GrokDesktopApp(tk.Tk):
         # Tag styles for messages
         self.chat_display.tag_config("user_tag", foreground="#60A5FA", font=("Segoe UI", 10, "bold"))
         self.chat_display.tag_config("bot_tag", foreground="#34D399", font=("Segoe UI", 10, "bold"))
+        self.chat_display.tag_config("thought_tag", foreground="#A1A1AA", font=("Segoe UI", 9, "italic"))
         self.chat_display.tag_config("tool_tag", foreground="#FBBF24", font=("Consolas", 9))
         self.chat_display.tag_config("body_tag", foreground="#E4E4E7", font=("Segoe UI", 10))
 
@@ -341,47 +342,23 @@ class GrokDesktopApp(tk.Tk):
         history = self.histories[specialist_name]
         spec_prompt = SPECIALISTS[specialist_name]["prompt"]
 
-        # Run real AI turn with specialist personality
+        # Run real AI turn with reasoning & thoughts
         res = BE.execute_turn(text, history, custom_system=spec_prompt)
         response = res["response"]
         actions = res.get("actions", [])
+        thoughts = res.get("thoughts", [])
 
-        self.after(0, lambda: self._render_bot_reply(specialist_name, response, actions))
+        self.after(0, lambda: self._render_bot_reply(specialist_name, response, actions, thoughts))
 
-    def _friendly_chat(self, text: str) -> str:
-        q = text.lower().strip()
-        words = set(re.findall(r"\w+", q))
-        greetings = {"hi", "hello", "yo", "hey", "ey", "bro", "sup", "wassup", "hiya"}
-
-        if words & greetings:
-            import random
-            replies = [
-                "Yo! What's good bro? What are we working on or talking about today?",
-                "Ey bro! How's it going? Always ready to chill and chat.",
-                "Hey! What's up? Tell me what's on your mind.",
-                "Yo! Great to hear from you. What's new?",
-            ]
-            return random.choice(replies)
-        elif "joke" in q:
-            return "Why do programmers prefer dark mode? Because light attracts bugs! 😄"
-        elif any(w in q for w in ["how are you", "hru", "how r u"]):
-            return "Chilling and running smooth on your PC! How are you doing today?"
-        elif any(w in q for w in ["who are you", "what are you"]):
-            return "I'm Grok in Chat Friendly mode! Your casual companion on your desktop. Ask me anything, rant, or just hang out."
-        elif any(w in q for w in ["bye", "cya", "see ya", "later"]):
-            return "Catch you later bro! Have an awesome day."
-        elif any(w in q for w in ["bored", "boring"]):
-            return "Bored? We can talk about wild tech theories, play trivia, brainstorm game ideas, or I can tell you some weird facts. Pick your poison!"
-        else:
-            return f"Haha I feel you! What's the plan for today? Any cool projects or just relaxing?"
-
-
-    def _render_bot_reply(self, specialist_name: str, response: str, actions: list[dict]):
+    def _render_bot_reply(self, specialist_name: str, response: str, actions: list[dict], thoughts: list[str]):
         self.chat_display.config(state=tk.NORMAL)
 
-        # Delete loading line
-        end_idx = self.chat_display.index("end-1c")
-        # Insert actions
+        # Show reasoning thought block if available
+        if thoughts:
+            for t in thoughts:
+                self.chat_display.insert(tk.END, f"\n💭 Thought:\n{t}\n", "thought_tag")
+
+        # Insert tool actions
         for act in actions:
             self.chat_display.insert(tk.END, f"\n⚙️ TOOL ({act['type']}): {act['detail']}\n", "tool_tag")
             self.chat_display.insert(tk.END, f"{act['output'][:200]}\n", "tool_tag")

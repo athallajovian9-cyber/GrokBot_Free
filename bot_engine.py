@@ -23,16 +23,18 @@ TOOL: finish("final summary")
 """
 
 
-def call_free_llm(messages: list[dict], api_key: str = "") -> str:
-    # 1. Local gateway (Port 20128)
+def call_free_llm(messages: list[dict], api_key: str = "") -> dict:
+    """Returns {'reasoning': str, 'content': str}."""
+    # 1. Local AI gateway with reasoning
     gateway_key = os.environ.get("HERMES_CUSTOM_LOCALHOST_20128_API_KEY") or os.environ.get("CUSTOM_API_KEY", "")
     if gateway_key:
         try:
             req = urllib.request.Request(
-                "http://localhost:20128/v1/chat/completions",
+                "http://127.0.0.1:20128/v1/chat/completions",
                 data=json.dumps({
-                    "model": "ag/gemini-3.8-flash-low",
+                    "model": "ag/gemini-3.8-flash-medium",
                     "messages": messages,
+                    "stream": True,
                 }).encode(),
                 headers={
                     "Authorization": f"Bearer {gateway_key}",
@@ -40,36 +42,45 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> str:
                 },
             )
             chunks = []
-            with urllib.request.urlopen(req, timeout=10) as r:
+            reasoning_chunks = []
+            with urllib.request.urlopen(req, timeout=12) as r:
                 for line in r:
                     line = line.decode("utf-8", errors="replace").strip()
                     if line.startswith("data: ") and line != "data: [DONE]":
                         try:
                             chunk = json.loads(line[6:])
-                            delta = chunk["choices"][0]["delta"].get("content", "")
-                            chunks.append(delta)
+                            delta = chunk["choices"][0]["delta"]
+                            if "reasoning_content" in delta:
+                                reasoning_chunks.append(delta["reasoning_content"])
+                            elif "reasoning" in delta:
+                                reasoning_chunks.append(delta["reasoning"])
+                            if "content" in delta and delta["content"]:
+                                chunks.append(delta["content"])
                         except Exception:
                             pass
             reply = "".join(chunks).strip()
-            if reply:
-                return reply
-        except Exception:
+            thought = "".join(reasoning_chunks).strip()
+            if reply or thought:
+                return {"reasoning": thought, "content": reply}
+        except Exception as e:
             pass
 
     # 2. Try local Ollama if running
     try:
         req = urllib.request.Request(
-            "http://localhost:11434/api/chat",
+            "http://127.0.0.1:11434/api/chat",
             data=json.dumps({"model": "qwen2.5:latest", "messages": messages, "stream": False}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=4) as r:
             res = json.loads(r.read().decode())
-            return res.get("message", {}).get("content", "")
+            ans = res.get("message", {}).get("content", "").strip()
+            if ans:
+                return {"reasoning": "", "content": ans}
     except Exception:
         pass
 
-    # 3. Built-in Local Autonomous Runner for offline feel
+    # 3. Fast Dynamic Fallback with explicit thinking
     last_user_msg = ""
     for m in reversed(messages):
         if m["role"] == "user":
@@ -81,45 +92,53 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> str:
 
     if words & {"hi", "hello", "yo", "hey", "ey", "bro", "sup", "wassup", "hiya"}:
         import random
-        return random.choice([
-            "Yo bro! What's good? What are we working on or chatting about?",
-            "Ey! How's it going? Always ready for tasks or chilling.",
-            "What's up! Ready to run commands, scout info, or just talk.",
-        ])
+        return {
+            "reasoning": f"User is greeting with '{last_user_msg}'. Respond with warm and witty Grok banter.",
+            "content": random.choice([
+                "Yo bro! What's good? What are we working on or chatting about today?",
+                "Ey! Great to see you. How's it going today?",
+                "What's up! Ready to run commands, scout info, or just chill.",
+            ])
+        }
 
     if "search" in query or "who" in query or "what is" in query or "latest" in query:
         q = re.sub(r"^(search|look up|find|what is)\s+", "", last_user_msg, flags=re.I)
-        return f'TOOL: search("{q}")'
+        return {"reasoning": f"Need live facts. Querying DuckDuckGo for: {q}", "content": f'TOOL: search("{q}")'}
     elif "run" in query or "dir" in query or "cmd" in query or "exec" in query:
         cmd = re.sub(r"^(run|execute|cmd)\s+", "", last_user_msg, flags=re.I)
-        return f'TOOL: terminal("{cmd}")'
+        return {"reasoning": f"Executing terminal command: {cmd}", "content": f'TOOL: terminal("{cmd}")'}
     elif "make" in query or "create file" in query or "write" in query:
-        return f'TOOL: write("app.py", "# Created by Grok Bot\\nprint(\\"Hello from Grok\\")")'
+        return {"reasoning": "Writing a new script file in workspace.", "content": f'TOOL: write("app.py", "# Created by Grok Bot\\nprint(\\"Hello from Grok\\")")'}
     else:
-        return (
-            f"Grok Bot here. I have full access to this machine's workspace, bash terminal, "
-            f"web search, and file tools. Give me a real project or task to execute."
-        )
+        return {
+            "reasoning": f"Analyzing user statement: '{last_user_msg}'. Formulating a direct Grok reply.",
+            "content": f"Grok Bot here. I'm connected to your PC with terminal, web search, and file tools. Give me a command or ask away!"
+        }
 
 
-def execute_turn(user_input: str, history: list[dict], api_key: str = "") -> dict:
+def execute_turn(user_input: str, history: list[dict], custom_system: str = "") -> dict:
     history.append({"role": "user", "content": user_input})
     action_logs = []
+    thoughts = []
 
-    # Iterative agent execution loop (up to 3 tool turns)
+    sys_content = custom_system or SYSTEM_PROMPT
+
     for step in range(3):
-        prompt_msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + history[-6:]
-        response = call_free_llm(prompt_msgs, api_key=api_key)
+        prompt_msgs = [{"role": "system", "content": sys_content}] + history[-8:]
+        res = call_free_llm(prompt_msgs)
+        response = res.get("content", "")
+        reasoning = res.get("reasoning", "")
+        if reasoning:
+            thoughts.append(reasoning)
 
         tool_match = re.search(r'TOOL:\s*(\w+)\((.*?)\)', response, re.DOTALL)
         if not tool_match:
             history.append({"role": "assistant", "content": response})
-            return {"response": response, "actions": action_logs}
+            return {"response": response, "actions": action_logs, "thoughts": thoughts}
 
         tool_name = tool_match.group(1).lower()
         args_raw = tool_match.group(2).strip()
 
-        # Parse simple arguments
         tool_res = ""
         if tool_name == "terminal":
             cmd = args_raw.strip('"\'')
@@ -142,7 +161,7 @@ def execute_turn(user_input: str, history: list[dict], api_key: str = "") -> dic
         elif tool_name == "finish":
             summary = args_raw.strip('"\'')
             history.append({"role": "assistant", "content": summary})
-            return {"response": summary, "actions": action_logs}
+            return {"response": summary, "actions": action_logs, "thoughts": thoughts}
 
         history.append({
             "role": "assistant",
@@ -150,4 +169,4 @@ def execute_turn(user_input: str, history: list[dict], api_key: str = "") -> dic
         })
 
     final_resp = history[-1]["content"] if history else "Task completed."
-    return {"response": final_resp, "actions": action_logs}
+    return {"response": final_resp, "actions": action_logs, "thoughts": thoughts}
