@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import ttk
 
@@ -203,6 +204,20 @@ class GrokDesktopApp(tk.Tk):
             pady=8,
         )
         pc_box.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # Discord Community Button
+        discord_btn = tk.Button(
+            pc_box,
+            text="💎 Join Discord (First 100 Badge)",
+            font=("Segoe UI", 8, "bold"),
+            bg="#5865F2",
+            fg="white",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://discord.gg/QtyBucygQ6"),
+            pady=4,
+        )
+        discord_btn.pack(fill=tk.X, pady=(0, 6))
 
         spec_text = "Platform: Windows 11\nWorkspace: ./workspace\nTerminal: Bash / CMD\nCost: $0.00 Free"
         pc_lbl = tk.Label(
