@@ -10,6 +10,7 @@ import re
 import urllib.request
 import agent_tools as T
 import memory_engine as MEM
+import config_manager as CFG
 
 SYSTEM_PROMPT = """You are Grok Bot, an autonomous AI teammate with your own computer, terminal, web search, and workspace.
 You have wit, unfiltered truth, sharp humor, and real problem-solving power.
@@ -26,45 +27,39 @@ TOOL: finish("final summary")
 
 def call_free_llm(messages: list[dict], api_key: str = "") -> dict:
     """Returns {'reasoning': str, 'content': str}."""
-    # 1. Local AI gateway with reasoning
-    gateway_key = os.environ.get("HERMES_CUSTOM_LOCALHOST_20128_API_KEY") or os.environ.get("CUSTOM_API_KEY", "")
-    if gateway_key:
+    cfg = CFG.load_config()
+    token = api_key or cfg.get("api_key", "").strip() or os.environ.get("OPENROUTER_API_KEY", "").strip()
+    base_url = cfg.get("base_url", "https://openrouter.ai/api/v1").rstrip("/")
+    model = cfg.get("model", "nvidia/nemotron-3.5-lightning:free")
+
+    # 1. If user provided a key (OpenRouter / Grok xAI endpoint)
+    if token:
         try:
+            url = f"{base_url}/chat/completions"
+            data = json.dumps({
+                "model": model,
+                "messages": messages,
+            }).encode()
             req = urllib.request.Request(
-                "http://127.0.0.1:20128/v1/chat/completions",
-                data=json.dumps({
-                    "model": "ag/gemini-3.8-flash-medium",
-                    "messages": messages,
-                    "stream": True,
-                }).encode(),
+                url,
+                data=data,
                 headers={
-                    "Authorization": f"Bearer {gateway_key}",
+                    "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/athallajovian9-cyber/GrokBot_Free",
+                    "X-Title": "GrokBot Free",
                 },
             )
-            chunks = []
-            reasoning_chunks = []
-            with urllib.request.urlopen(req, timeout=12) as r:
-                for line in r:
-                    line = line.decode("utf-8", errors="replace").strip()
-                    if line.startswith("data: ") and line != "data: [DONE]":
-                        try:
-                            chunk = json.loads(line[6:])
-                            delta = chunk["choices"][0]["delta"]
-                            if "reasoning_content" in delta:
-                                reasoning_chunks.append(delta["reasoning_content"])
-                            elif "reasoning" in delta:
-                                reasoning_chunks.append(delta["reasoning"])
-                            if "content" in delta and delta["content"]:
-                                chunks.append(delta["content"])
-                        except Exception:
-                            pass
-            reply = "".join(chunks).strip()
-            thought = "".join(reasoning_chunks).strip()
-            if reply or thought:
-                return {"reasoning": thought, "content": reply}
+            with urllib.request.urlopen(req, timeout=15) as r:
+                res = json.loads(r.read().decode())
+                content = res["choices"][0]["message"].get("content", "")
+                reasoning = res["choices"][0]["message"].get("reasoning", "") or res["choices"][0]["message"].get("reasoning_content", "")
+                return {"reasoning": reasoning, "content": content}
         except Exception as e:
-            pass
+            return {
+                "reasoning": f"API request error: {e}",
+                "content": f"[API Error: {e}]. Please check your API key in Settings (⚙️)."
+            }
 
     # 2. Try local Ollama if running
     try:
@@ -73,7 +68,7 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> dict:
             data=json.dumps({"model": "qwen2.5:latest", "messages": messages, "stream": False}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=3) as r:
             res = json.loads(r.read().decode())
             ans = res.get("message", {}).get("content", "").strip()
             if ans:
@@ -81,7 +76,7 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> dict:
     except Exception:
         pass
 
-    # 3. Fast Dynamic Fallback with explicit thinking
+    # 3. If no key and no Ollama, explain clearly with Grok flair
     last_user_msg = ""
     for m in reversed(messages):
         if m["role"] == "user":
@@ -92,28 +87,29 @@ def call_free_llm(messages: list[dict], api_key: str = "") -> dict:
     words = set(re.findall(r"\w+", query))
 
     if words & {"hi", "hello", "yo", "hey", "ey", "bro", "sup", "wassup", "hiya"}:
-        import random
         return {
-            "reasoning": f"User is greeting with '{last_user_msg}'. Respond with warm and witty Grok banter.",
-            "content": random.choice([
-                "Yo bro! What's good? What are we working on or chatting about today?",
-                "Ey! Great to see you. How's it going today?",
-                "What's up! Ready to run commands, scout info, or just chill.",
-            ])
+            "reasoning": "Greeting received. Reminding user to configure their free API key.",
+            "content": (
+                "Yo bro! I'm online, but to unlock my full reasoning AI brain, click **⚙️ Settings** "
+                "on the sidebar and paste your free OpenRouter or Grok key! (It's 100% free at openrouter.ai)."
+            )
         }
 
     if "search" in query or "who" in query or "what is" in query or "latest" in query:
         q = re.sub(r"^(search|look up|find|what is)\s+", "", last_user_msg, flags=re.I)
-        return {"reasoning": f"Need live facts. Querying DuckDuckGo for: {q}", "content": f'TOOL: search("{q}")'}
+        return {"reasoning": f"Querying web for: {q}", "content": f'TOOL: search("{q}")'}
     elif "run" in query or "dir" in query or "cmd" in query or "exec" in query:
         cmd = re.sub(r"^(run|execute|cmd)\s+", "", last_user_msg, flags=re.I)
         return {"reasoning": f"Executing terminal command: {cmd}", "content": f'TOOL: terminal("{cmd}")'}
     elif "make" in query or "create file" in query or "write" in query:
-        return {"reasoning": "Writing a new script file in workspace.", "content": f'TOOL: write("app.py", "# Created by Grok Bot\\nprint(\\"Hello from Grok\\")")'}
+        return {"reasoning": "Writing script in workspace.", "content": f'TOOL: write("app.py", "# Created by Grok Bot\\nprint(\\"Hello from Grok\\")")'}
     else:
         return {
-            "reasoning": f"Analyzing user statement: '{last_user_msg}'. Formulating a direct Grok reply.",
-            "content": f"Grok Bot here. I'm connected to your PC with terminal, web search, and file tools. Give me a command or ask away!"
+            "reasoning": "No API key configured.",
+            "content": (
+                "Grok Bot is ready! Click **⚙️ Settings** at the bottom of the sidebar to add your "
+                "free OpenRouter or Grok API key so I can think and reason freely."
+            )
         }
 
 

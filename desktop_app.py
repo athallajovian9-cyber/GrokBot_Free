@@ -97,7 +97,22 @@ class GrokDesktopApp(tk.Tk):
             padx=8,
             pady=4,
         )
-        self.mem_badge.pack(fill=tk.X, pady=(0, 14))
+        self.mem_badge.pack(fill=tk.X, pady=(0, 10))
+
+        # Settings Button
+        settings_btn = tk.Button(
+            sidebar,
+            text="⚙️ AI Settings / API Key",
+            font=("Segoe UI", 9, "bold"),
+            bg="#272730",
+            fg="#F4F4F5",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.open_settings_modal,
+            padx=8,
+            pady=4,
+        )
+        settings_btn.pack(fill=tk.X, pady=(0, 12))
 
         roster_lbl = tk.Label(
             sidebar,
@@ -279,6 +294,93 @@ class GrokDesktopApp(tk.Tk):
             cursor="hand2",
         )
         self.send_btn.pack(side=tk.RIGHT)
+
+    def open_settings_modal(self):
+        import config_manager as CFG
+        cfg = CFG.load_config()
+
+        win = tk.Toplevel(self)
+        win.title("⚙️ AI Configuration & Free Keys")
+        win.geometry("520x420")
+        win.configure(bg="#121216")
+        win.transient(self)
+        win.grab_set()
+
+        title = tk.Label(
+            win,
+            text="AI Model & Key Settings",
+            font=("Segoe UI", 12, "bold"),
+            bg="#121216",
+            fg="white",
+        )
+        title.pack(anchor="w", padx=20, pady=(20, 4))
+
+        sub = tk.Label(
+            win,
+            text="Grok Bot works with any OpenRouter free model or xAI Grok API key.",
+            font=("Segoe UI", 9),
+            bg="#121216",
+            fg="#A1A1AA",
+        )
+        sub.pack(anchor="w", padx=20, pady=(0, 16))
+
+        # API Key field
+        tk.Label(win, text="API Key (OpenRouter or Grok xAI):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        key_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA", show="*")
+        key_entry.insert(0, cfg.get("api_key", ""))
+        key_entry.pack(fill=tk.X, padx=20, pady=(4, 12), ipady=5)
+
+        # Base URL field
+        tk.Label(win, text="Base URL (Default: OpenRouter):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        url_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA")
+        url_entry.insert(0, cfg.get("base_url", "https://openrouter.ai/api/v1"))
+        url_entry.pack(fill=tk.X, padx=20, pady=(4, 12), ipady=5)
+
+        # Model field
+        tk.Label(win, text="Model ID (e.g. nvidia/nemotron-3.5-lightning:free or x-ai/grok-2):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        model_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA")
+        model_entry.insert(0, cfg.get("model", "nvidia/nemotron-3.5-lightning:free"))
+        model_entry.pack(fill=tk.X, padx=20, pady=(4, 16), ipady=5)
+
+        def save_and_close():
+            new_cfg = {
+                "api_key": key_entry.get().strip(),
+                "base_url": url_entry.get().strip() or "https://openrouter.ai/api/v1",
+                "model": model_entry.get().strip() or "nvidia/nemotron-3.5-lightning:free",
+            }
+            CFG.save_config(new_cfg)
+            win.destroy()
+
+        btn_box = tk.Frame(win, bg="#121216")
+        btn_box.pack(fill=tk.X, padx=20, pady=(10, 0))
+
+        save_btn = tk.Button(
+            btn_box,
+            text="💾 Save Configuration",
+            font=("Segoe UI", 10, "bold"),
+            bg="#10B981",
+            fg="white",
+            relief=tk.FLAT,
+            padx=16,
+            pady=6,
+            cursor="hand2",
+            command=save_and_close,
+        )
+        save_btn.pack(side=tk.RIGHT)
+
+        cancel_btn = tk.Button(
+            btn_box,
+            text="Cancel",
+            font=("Segoe UI", 10),
+            bg="#272730",
+            fg="#A1A1AA",
+            relief=tk.FLAT,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=win.destroy,
+        )
+        cancel_btn.pack(side=tk.RIGHT, padx=10)
 
     def _update_memory_ui(self):
         try:
