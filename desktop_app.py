@@ -80,12 +80,24 @@ class GrokDesktopApp(tk.Tk):
 
         sub_lbl = tk.Label(
             sidebar,
-            text="DESKTOP COMPUTER AGENT",
+            text="AUTONOMOUS COMPUTER AGENT",
             font=("Consolas", 8, "bold"),
             bg="#121216",
             fg="#10B981",
         )
-        sub_lbl.pack(anchor="w", pady=(2, 16))
+        sub_lbl.pack(anchor="w", pady=(2, 12))
+
+        # Memory Stats Banner
+        self.mem_badge = tk.Label(
+            sidebar,
+            text="🧠 Memory: 0 facts learned",
+            font=("Segoe UI", 8),
+            bg="#1A1C24",
+            fg="#60A5FA",
+            padx=8,
+            pady=4,
+        )
+        self.mem_badge.pack(fill=tk.X, pady=(0, 14))
 
         roster_lbl = tk.Label(
             sidebar,
@@ -268,7 +280,17 @@ class GrokDesktopApp(tk.Tk):
         )
         self.send_btn.pack(side=tk.RIGHT)
 
+    def _update_memory_ui(self):
+        try:
+            import memory_engine as MEM
+            mem = MEM.load_memory()
+            total = len(mem.get("user_profile", [])) + len(mem.get("learned_facts", []))
+            self.mem_badge.config(text=f"🧠 Learned: {total} facts")
+        except Exception:
+            pass
+
     def switch_specialist(self, name: str):
+        self._update_memory_ui()
         self.current_specialist = name
         spec = SPECIALISTS[name]
 
@@ -367,6 +389,7 @@ class GrokDesktopApp(tk.Tk):
         self.chat_display.insert(tk.END, f"{response}\n", "body_tag")
         self.chat_display.see(tk.END)
         self.chat_display.config(state=tk.DISABLED)
+        self._update_memory_ui()
 
 
 def main():

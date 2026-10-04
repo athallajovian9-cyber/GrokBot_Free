@@ -9,6 +9,7 @@ import os
 import re
 import urllib.request
 import agent_tools as T
+import memory_engine as MEM
 
 SYSTEM_PROMPT = """You are Grok Bot, an autonomous AI teammate with your own computer, terminal, web search, and workspace.
 You have wit, unfiltered truth, sharp humor, and real problem-solving power.
@@ -121,7 +122,9 @@ def execute_turn(user_input: str, history: list[dict], custom_system: str = "") 
     action_logs = []
     thoughts = []
 
-    sys_content = custom_system or SYSTEM_PROMPT
+    # Inject persistent learned memories into prompt
+    mem_context = MEM.get_memory_context()
+    sys_content = (custom_system or SYSTEM_PROMPT) + ("\n" + mem_context if mem_context else "")
 
     for step in range(3):
         prompt_msgs = [{"role": "system", "content": sys_content}] + history[-8:]
@@ -134,6 +137,8 @@ def execute_turn(user_input: str, history: list[dict], custom_system: str = "") 
         tool_match = re.search(r'TOOL:\s*(\w+)\((.*?)\)', response, re.DOTALL)
         if not tool_match:
             history.append({"role": "assistant", "content": response})
+            # Learn and extract durable facts from this interaction
+            MEM.extract_and_learn(user_input, response)
             return {"response": response, "actions": action_logs, "thoughts": thoughts}
 
         tool_name = tool_match.group(1).lower()
@@ -161,6 +166,7 @@ def execute_turn(user_input: str, history: list[dict], custom_system: str = "") 
         elif tool_name == "finish":
             summary = args_raw.strip('"\'')
             history.append({"role": "assistant", "content": summary})
+            MEM.extract_and_learn(user_input, summary)
             return {"response": summary, "actions": action_logs, "thoughts": thoughts}
 
         history.append({
@@ -169,4 +175,5 @@ def execute_turn(user_input: str, history: list[dict], custom_system: str = "") 
         })
 
     final_resp = history[-1]["content"] if history else "Task completed."
+    MEM.extract_and_learn(user_input, final_resp)
     return {"response": final_resp, "actions": action_logs, "thoughts": thoughts}
