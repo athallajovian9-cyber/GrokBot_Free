@@ -300,53 +300,77 @@ class GrokDesktopApp(tk.Tk):
         cfg = CFG.load_config()
 
         win = tk.Toplevel(self)
-        win.title("⚙️ AI Configuration & Free Keys")
-        win.geometry("520x420")
+        win.title("⚙️ AI Configuration & Provider Selection")
+        win.geometry("580x540")
         win.configure(bg="#121216")
         win.transient(self)
         win.grab_set()
 
         title = tk.Label(
             win,
-            text="AI Model & Key Settings",
+            text="Choose AI Provider & BYOK",
             font=("Segoe UI", 12, "bold"),
             bg="#121216",
             fg="white",
         )
-        title.pack(anchor="w", padx=20, pady=(20, 4))
+        title.pack(anchor="w", padx=20, pady=(16, 4))
 
         sub = tk.Label(
             win,
-            text="Grok Bot works with any OpenRouter free model or xAI Grok API key.",
+            text="Supports 40+ AI model clouds (OpenAI, Anthropic, Gemini, Groq, DeepSeek, xAI, etc.)",
             font=("Segoe UI", 9),
             bg="#121216",
             fg="#A1A1AA",
         )
-        sub.pack(anchor="w", padx=20, pady=(0, 16))
+        sub.pack(anchor="w", padx=20, pady=(0, 14))
+
+        # Provider Dropdown
+        tk.Label(win, text="Select Provider:", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        provider_var = tk.StringVar(value=cfg.get("provider_name", "OpenRouter (Free & Multi)"))
+        providers_list = list(CFG.PROVIDERS.keys())
+
+        provider_combo = ttk.Combobox(win, textvariable=provider_var, values=providers_list, state="readonly", font=("Segoe UI", 10))
+        provider_combo.pack(fill=tk.X, padx=20, pady=(4, 10))
 
         # API Key field
-        tk.Label(win, text="API Key (OpenRouter or Grok xAI):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        tk.Label(win, text="API Key:", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
         key_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA", show="*")
         key_entry.insert(0, cfg.get("api_key", ""))
-        key_entry.pack(fill=tk.X, padx=20, pady=(4, 12), ipady=5)
+        key_entry.pack(fill=tk.X, padx=20, pady=(4, 10), ipady=4)
 
         # Base URL field
-        tk.Label(win, text="Base URL (Default: OpenRouter):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        tk.Label(win, text="Base URL:", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
         url_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA")
         url_entry.insert(0, cfg.get("base_url", "https://openrouter.ai/api/v1"))
-        url_entry.pack(fill=tk.X, padx=20, pady=(4, 12), ipady=5)
+        url_entry.pack(fill=tk.X, padx=20, pady=(4, 10), ipady=4)
 
         # Model field
-        tk.Label(win, text="Model ID (e.g. nvidia/nemotron-3.5-lightning:free or x-ai/grok-2):", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
+        tk.Label(win, text="Model ID:", font=("Segoe UI", 9, "bold"), bg="#121216", fg="#E4E4E7").pack(anchor="w", padx=20)
         model_entry = tk.Entry(win, font=("Consolas", 10), bg="#1B1C22", fg="white", bd=0, highlightthickness=1, highlightcolor="#60A5FA")
         model_entry.insert(0, cfg.get("model", "nvidia/nemotron-3.5-lightning:free"))
-        model_entry.pack(fill=tk.X, padx=20, pady=(4, 16), ipady=5)
+        model_entry.pack(fill=tk.X, padx=20, pady=(4, 10), ipady=4)
+
+        desc_lbl = tk.Label(win, text="", font=("Segoe UI", 8, "italic"), bg="#121216", fg="#71717A", justify=tk.LEFT)
+        desc_lbl.pack(anchor="w", padx=20, pady=(0, 10))
+
+        def on_provider_change(_event=None):
+            pname = provider_var.get()
+            info = CFG.PROVIDERS.get(pname, {})
+            url_entry.delete(0, tk.END)
+            url_entry.insert(0, info.get("base_url", ""))
+            model_entry.delete(0, tk.END)
+            model_entry.insert(0, info.get("default_model", ""))
+            desc_lbl.config(text=info.get("desc", ""))
+
+        provider_combo.bind("<<ComboboxSelected>>", on_provider_change)
+        on_provider_change()
 
         def save_and_close():
             new_cfg = {
+                "provider_name": provider_var.get(),
                 "api_key": key_entry.get().strip(),
-                "base_url": url_entry.get().strip() or "https://openrouter.ai/api/v1",
-                "model": model_entry.get().strip() or "nvidia/nemotron-3.5-lightning:free",
+                "base_url": url_entry.get().strip(),
+                "model": model_entry.get().strip(),
             }
             CFG.save_config(new_cfg)
             win.destroy()
@@ -356,7 +380,7 @@ class GrokDesktopApp(tk.Tk):
 
         save_btn = tk.Button(
             btn_box,
-            text="💾 Save Configuration",
+            text="💾 Save & Apply",
             font=("Segoe UI", 10, "bold"),
             bg="#10B981",
             fg="white",
